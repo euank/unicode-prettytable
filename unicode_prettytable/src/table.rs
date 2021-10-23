@@ -1,5 +1,3 @@
-use crate::util::StringBuffer;
-
 use std::fmt;
 use derive_builder::Builder;
 
@@ -67,10 +65,10 @@ where
     &'a T: AsRef<str>
 {
     /// Creates a list of byte vectors corresponding to each string of horizontal separators
-    fn generate_horizontal_separators(column_widths: &Vec<usize>, horizontal_char: &str) -> Vec<Vec<u8>> {
+    fn generate_horizontal_separators(column_widths: &[usize], horizontal_char: &str) -> Vec<String> {
         column_widths
             .iter()
-            .map(|&length| horizontal_char.repeat(length).into_bytes())
+            .map(|&length| horizontal_char.repeat(length))
             .collect::<Vec<_>>()
     }
 
@@ -179,36 +177,36 @@ where
         };
 
         // fill string with spaces
-        let mut buffer = StringBuffer::with_capacity_fill(string_length, ' ');
+        let mut buffer = String::with_capacity(string_length);
 
         let standard_horizontal_separators = Self::generate_horizontal_separators(&column_widths, HORIZONTAL);
         let header_horizontal_separators = Self::generate_horizontal_separators(&column_widths, HORIZONTAL_HEADER);
 
-        let create_sep_row = |horizontal_separators: &Vec<Vec<u8>>, left_char, middle_char, right_char, newline| {
+        let create_sep_row = |horizontal_separators: &[String], left_char, middle_char, right_char, newline| {
             let mut sep_buffer = {
                 // allocate one extra byte if there is a newline at the end
                 let newline_increment = if newline { 1 } else { 0 };
                 let capacity = total_width_per_row + newline_increment;
-                StringBuffer::with_capacity(capacity)
+                String::with_capacity(capacity)
             };
 
-            sep_buffer.push_chars(left_char);
+            sep_buffer.push_str(left_char);
 
             let (last_sep, seps) = horizontal_separators.split_last().unwrap();
 
             for sep in seps {
-                sep_buffer.push_bytes(sep);
-                sep_buffer.push_chars(middle_char);
+                sep_buffer.push_str(&sep);
+                sep_buffer.push_str(middle_char);
             }
 
-            sep_buffer.push_bytes(&last_sep);
-            sep_buffer.push_chars(right_char);
+            sep_buffer.push_str(last_sep);
+            sep_buffer.push_str(right_char);
 
             if newline {
-                sep_buffer.push_chars("\n")
+                sep_buffer.push('\n')
             }
 
-            sep_buffer.into_buffer()
+            sep_buffer
         };
 
         let mut input_iterator = self.rows.iter().skip(row_offset).peekable();
@@ -216,15 +214,15 @@ where
         macro_rules! push_data_row {
             ($row_yielder:expr, $col_formatter:expr) => {
                 if let Some(row) = $row_yielder {
-                    buffer.push_chars(VERTICAL);
+                    buffer.push_str(VERTICAL);
                     for (col_index, col) in row.into_iter().enumerate() {
                         let base = col.as_ref();
 
-                        buffer.push_chars_fixed_width($col_formatter(base, column_widths[col_index]), column_widths[col_index]);
-                        buffer.push_chars(VERTICAL);
+                        buffer.push_str(&$col_formatter(base, column_widths[col_index]));
+                        buffer.push_str(VERTICAL);
                     }
 
-                    buffer.push_chars("\n");
+                    buffer.push('\n');
                 }
             };
             // overload that defaults to using input_iterator
@@ -249,12 +247,12 @@ where
 
         if self.header.double_bar {
             let header_top = create_sep_row(&header_horizontal_separators, TOP_LEFT_CORNER_HEADER, TOP_BRACE_HEADER, TOP_RIGHT_CORNER_HEADER, true);
-            buffer.push_bytes(&header_top);
+            buffer.push_str(&header_top);
 
             push_header_data_row!();
 
             let header_bottom = create_sep_row(&header_horizontal_separators, LEFT_BRACE_HEADER, MIDDLE_BRACE_HEADER, RIGHT_BRACE_HEADER, true);
-            buffer.push_bytes(&header_bottom);
+            buffer.push_str(&header_bottom);
 
             // TODO
             // handle case where there are no remaining rows
@@ -263,12 +261,12 @@ where
         else {
             let header = create_sep_row(&standard_horizontal_separators, TOP_LEFT_CORNER, TOP_BRACE, TOP_RIGHT_CORNER, true);
             // add header
-            buffer.push_bytes(&header);
+            buffer.push_str(&header);
             push_header_data_row!();
 
             // only put the separator if there are rows under
             if input_iterator.peek().is_some() {
-                buffer.push_bytes(&standard_separator);
+                buffer.push_str(&standard_separator);
             }
         }
 
@@ -279,7 +277,7 @@ where
 
             // only create a standard separator row if there are more data rows
             if input_iterator.peek().is_some() {
-                buffer.push_bytes(&standard_separator);
+                buffer.push_str(&standard_separator);
             }
             else {
                 // break out if there are no more data rows
@@ -288,7 +286,7 @@ where
         }
 
         // add footer
-        buffer.push_bytes(&footer);
+        buffer.push_str(&footer);
 
         write!(f, "{}", buffer.to_string())
     }
